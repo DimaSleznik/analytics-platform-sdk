@@ -29,13 +29,26 @@ public sealed class UnityAnalyticsBehaviour : MonoBehaviour
         }
 
         var config = settings.ToConfig();
+        config.PlayerId = ResolvePlayerId(settings.PlayerIdPrefsKey);
         var store = new NdjsonEventStore(
             System.IO.Path.Combine(Application.persistentDataPath, "analytics-queue.ndjson"),
             config.MaxQueueSize);
+        var remoteConfig = new RemoteConfigClient(config, new HttpClient());
+        var remoteConfigStore = new FileRemoteConfigStore(
+            System.IO.Path.Combine(Application.persistentDataPath, "analytics-config.json"));
         var transport = new HttpAnalyticsTransport(config, new HttpClient(), new UnityClock());
-        _client = AnalyticsClient.Create(config, store, transport, new UnityClock(), new GuidAnalyticsIdGenerator(), new UnityLogSink());
+        _client = AnalyticsClient.Create(
+            config,
+            store,
+            transport,
+            new UnityClock(),
+            new GuidAnalyticsIdGenerator(),
+            new UnityLogSink(),
+            remoteConfigProvider: remoteConfig,
+            remoteConfigStore: remoteConfigStore);
         _lifetime = new CancellationTokenSource();
         Analytics.Initialize(_client);
+        _ = _client.RefreshConfigAsync(_lifetime.Token);
         if (startSessionOnAwake)
         {
             _client.StartSession();
@@ -97,6 +110,20 @@ public sealed class UnityAnalyticsBehaviour : MonoBehaviour
         catch (OperationCanceledException)
         {
         }
+    }
+
+    private static string ResolvePlayerId(string key)
+    {
+        var value = PlayerPrefs.GetString(key, string.Empty);
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        value = Guid.NewGuid().ToString("N");
+        PlayerPrefs.SetString(key, value);
+        PlayerPrefs.Save();
+        return value;
     }
 }
 }

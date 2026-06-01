@@ -71,6 +71,24 @@ public sealed class AnalyticsCoreTests
     }
 
     [Fact]
+    public void AssignmentMatchesBackendVector()
+    {
+        Assignment.Bucket("player-1", "onboarding:v1").Should().Be(6266);
+        Assignment.Bucket("player-42", "onboarding:v1").Should().Be(4386);
+        Assignment.Bucket("user-а", "onboarding:v1").Should().Be(169);
+    }
+
+    [Fact]
+    public void RemoteConfigParsesAssignments()
+    {
+        var config = RemoteConfigClient.Parse(
+            "{\"assignments\":[{\"experimentKey\":\"onboarding\",\"variant\":\"variant_b\",\"params\":{\"starterGold\":150}}]}");
+
+        config.Variants["onboarding"].Name.Should().Be("variant_b");
+        config.Variants["onboarding"].Parameters["starterGold"].Should().Be(150d);
+    }
+
+    [Fact]
     public void ExponentialBackoffGrowsUntilCap()
     {
         ExponentialBackoff.Delay(0, TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(1)).Should().Be(TimeSpan.Zero);
@@ -94,6 +112,59 @@ public sealed class AnalyticsCoreTests
         result.Sent.Should().Be(1);
         (await store.CountAsync(CancellationToken.None)).Should().Be(0);
         transport.Batch.Events[0].UserId.Should().Be("player-1");
+    }
+
+    [Fact]
+    public async Task GetVariantLogsExposureOnce()
+    {
+        var store = new InMemoryEventStore();
+        var client = AnalyticsClient.Create(
+            Config(playerId: "player-1"),
+            store,
+            new CapturingTransport(),
+            new FixedClock(),
+            new IncrementingIds(),
+            remoteConfigProvider: new FixedRemoteConfigProvider(new RemoteConfig(
+                new Dictionary<string, ExperimentVariant>
+                {
+                    ["onboarding"] = new(
+                        "variant_b",
+                        new Dictionary<string, object?> { ["starterGold"] = 150 }),
+                })));
+
+        await client.RefreshConfigAsync();
+        client.GetVariant("onboarding").Name.Should().Be("variant_b");
+        client.GetParam("onboarding", "starterGold", 0).Should().Be(150);
+        client.GetVariant("onboarding").Name.Should().Be("variant_b");
+
+        var events = await store.PeekAsync(10, CancellationToken.None);
+        events.Should().ContainSingle(item => item.EventName == "experiment_exposure");
+        events.Single(item => item.EventName == "experiment_exposure")
+            .Properties["variant"]
+            .Should()
+            .Be("variant_b");
+    }
+
+    [Fact]
+    public async Task RefreshConfigFallsBackToCache()
+    {
+        var store = new MemoryRemoteConfigStore(new RemoteConfig(
+            new Dictionary<string, ExperimentVariant>
+            {
+                ["offer"] = new("control", new Dictionary<string, object?>()),
+            }));
+        var client = AnalyticsClient.Create(
+            Config(playerId: "player-1"),
+            new InMemoryEventStore(),
+            new CapturingTransport(),
+            new FixedClock(),
+            new IncrementingIds(),
+            remoteConfigProvider: new FailingRemoteConfigProvider(),
+            remoteConfigStore: store);
+
+        await client.RefreshConfigAsync();
+
+        client.GetVariant("offer").Name.Should().Be("control");
     }
 
     [Fact]
@@ -235,13 +306,16 @@ public sealed class AnalyticsCoreTests
         File.Delete(path);
     }
 
-    private static AnalyticsConfig Config(bool consentRequired = false)
+    private static AnalyticsConfig Config(
+        bool consentRequired = false,
+        string? playerId = null)
     {
         return new AnalyticsConfig
         {
             Endpoint = new Uri("http://localhost:3000/api/"),
             ProjectId = "project",
             ApiKey = "key",
+            PlayerId = playerId,
             ConsentRequired = consentRequired,
         };
     }
@@ -321,6 +395,50 @@ public sealed class CapturingHttpHandler : HttpMessageHandler
     {
         RequestUri = request.RequestUri?.ToString();
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted));
+    }
+}
+
+public sealed class FixedRemoteConfigProvider : IRemoteConfigProvider
+{
+    private readonly RemoteConfig _config;
+
+    public FixedRemoteConfigProvider(RemoteConfig config)
+    {
+        _config = config;
+    }
+
+    public Task<RemoteConfig> FetchAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_config);
+    }
+}
+
+public sealed class FailingRemoteConfigProvider : IRemoteConfigProvider
+{
+    public Task<RemoteConfig> FetchAsync(CancellationToken cancellationToken)
+    {
+        throw new InvalidOperationException("offline");
+    }
+}
+
+public sealed class MemoryRemoteConfigStore : IRemoteConfigStore
+{
+    private RemoteConfig? _config;
+
+    public MemoryRemoteConfigStore(RemoteConfig? config = null)
+    {
+        _config = config;
+    }
+
+    public Task SaveAsync(RemoteConfig config, CancellationToken cancellationToken)
+    {
+        _config = config;
+        return Task.CompletedTask;
+    }
+
+    public Task<RemoteConfig?> LoadAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(_config);
     }
 }
 }

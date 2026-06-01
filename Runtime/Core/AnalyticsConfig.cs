@@ -9,6 +9,10 @@ public sealed class AnalyticsConfig
     public Uri Endpoint { get; set; } = new("http://localhost:3000/api");
     public string ProjectId { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
+    public string? PlayerId { get; set; }
+    public string? Platform { get; set; }
+    public string? Version { get; set; }
+    public string? Cohort { get; set; }
     public bool RequireHmac { get; set; } = true;
     public int BatchSize { get; set; } = 50;
     public TimeSpan FlushInterval { get; set; } = TimeSpan.FromSeconds(15);

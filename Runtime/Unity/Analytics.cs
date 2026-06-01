@@ -27,6 +27,16 @@ public static class Analytics
         return _instance?.Track(name, properties) ?? false;
     }
 
+    public static ExperimentVariant GetVariant(string experimentKey)
+    {
+        return _instance?.GetVariant(experimentKey) ?? new ExperimentVariant("control", new Dictionary<string, object?>());
+    }
+
+    public static T GetParam<T>(string experimentKey, string key, T fallback)
+    {
+        return _instance is null ? fallback : _instance.GetParam(experimentKey, key, fallback);
+    }
+
     public static void AppForeground()
     {
         _instance?.AppForeground();
@@ -45,6 +55,11 @@ public static class Analytics
     public static Task<FlushResult> FlushAsync(CancellationToken cancellationToken = default)
     {
         return _instance?.FlushAsync(cancellationToken) ?? Task.FromResult(new FlushResult(0, 0, true));
+    }
+
+    public static Task RefreshConfigAsync(CancellationToken cancellationToken = default)
+    {
+        return _instance?.RefreshConfigAsync(cancellationToken) ?? Task.CompletedTask;
     }
 }
 }

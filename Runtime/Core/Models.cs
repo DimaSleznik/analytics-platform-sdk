@@ -78,4 +78,28 @@ public sealed class FlushResult
     public bool Success { get; }
     public string? Error { get; }
 }
+
+public sealed class ExperimentVariant
+{
+    public ExperimentVariant(string name, IReadOnlyDictionary<string, object?> parameters)
+    {
+        Name = name;
+        Parameters = parameters;
+    }
+
+    public string Name { get; }
+    public IReadOnlyDictionary<string, object?> Parameters { get; }
+}
+
+public sealed class RemoteConfig
+{
+    public RemoteConfig(IReadOnlyDictionary<string, ExperimentVariant> variants)
+    {
+        Variants = variants;
+    }
+
+    public IReadOnlyDictionary<string, ExperimentVariant> Variants { get; }
+
+    public static RemoteConfig Empty { get; } = new(new Dictionary<string, ExperimentVariant>());
+}
 }

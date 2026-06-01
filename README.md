@@ -27,12 +27,23 @@ analytics.Track("session_start", new Dictionary<string, object?>
 await analytics.FlushAsync(CancellationToken.None);
 ```
 
+## Experiments
+
+Call `RefreshConfigAsync` once after startup, then read variants at the point where the player actually sees the changed behavior. The first read logs one `experiment_exposure` event per session.
+
+```csharp
+await analytics.RefreshConfigAsync(CancellationToken.None);
+var variant = analytics.GetVariant("starter_offer");
+var starterGold = analytics.GetParam("starter_offer", "starterGold", 100);
+```
+
 ## Environment
 
 | Setting | Meaning |
 |---|---|
 | endpoint | Backend base URL, for example `http://localhost:3000/api` |
 | projectId | Project id from the analytics backend |
+| playerIdPrefsKey | Unity PlayerPrefs key for the anonymous sticky experiment id |
 | apiKeyEnvironmentVariable | Environment variable that contains the project API key |
 | requireHmac | Sends `x-signature` and `x-timestamp` |
 | batchSize | Max events per flush |

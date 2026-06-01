@@ -10,6 +10,7 @@ public sealed class AnalyticsSettings : ScriptableObject
 {
     [SerializeField] private string endpoint = "http://localhost:3000/api";
     [SerializeField] private string projectId = "";
+    [SerializeField] private string playerIdPrefsKey = "analytics.player_id";
     [SerializeField] private string apiKeyEnvironmentVariable = "KF_ANALYTICS_API_KEY";
     [SerializeField] private bool requireHmac = true;
     [SerializeField] private int batchSize = 50;
@@ -23,6 +24,8 @@ public sealed class AnalyticsSettings : ScriptableObject
     [Range(0, 1)]
     [SerializeField] private double samplingRate = 1;
 
+    public string PlayerIdPrefsKey => playerIdPrefsKey;
+
     public AnalyticsConfig ToConfig()
     {
         var config = new AnalyticsConfig
@@ -30,6 +33,8 @@ public sealed class AnalyticsSettings : ScriptableObject
             Endpoint = new Uri(endpoint.EndsWith("/", StringComparison.Ordinal) ? endpoint : $"{endpoint}/"),
             ProjectId = projectId,
             ApiKey = Environment.GetEnvironmentVariable(apiKeyEnvironmentVariable) ?? string.Empty,
+            Platform = Application.platform.ToString(),
+            Version = Application.version,
             RequireHmac = requireHmac,
             BatchSize = batchSize,
             FlushInterval = TimeSpan.FromSeconds(flushIntervalSeconds),
@@ -42,6 +47,7 @@ public sealed class AnalyticsSettings : ScriptableObject
             SamplingRate = samplingRate,
         };
         config.DefaultContext["platform"] = Application.platform.ToString();
+        config.DefaultContext["version"] = Application.version;
         config.DefaultContext["unityVersion"] = Application.unityVersion;
         config.DefaultContext["sdk"] = "com.knightfantasy.analytics";
         return config;

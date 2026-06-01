@@ -15,12 +15,16 @@ public sealed class AnalyticsClient : IAnalytics
     private readonly IAnalyticsIdGenerator _ids;
     private readonly ILogSink _log;
     private readonly IRetryDelay _retryDelay;
+    private readonly IRemoteConfigProvider? _remoteConfigProvider;
+    private readonly IRemoteConfigStore? _remoteConfigStore;
     private readonly Dictionary<string, object?> _userProperties = new();
+    private readonly HashSet<string> _exposedExperiments = new(StringComparer.Ordinal);
     private string? _userId;
     private string _anonymousId;
     private string _sessionId;
     private DateTimeOffset? _lastBackgroundAt;
     private bool _consentGranted;
+    private RemoteConfig _remoteConfig = RemoteConfig.Empty;
 
     private AnalyticsClient(
         AnalyticsConfig config,
@@ -29,7 +33,9 @@ public sealed class AnalyticsClient : IAnalytics
         IClock clock,
         IAnalyticsIdGenerator ids,
         ILogSink log,
-        IRetryDelay retryDelay)
+        IRetryDelay retryDelay,
+        IRemoteConfigProvider? remoteConfigProvider,
+        IRemoteConfigStore? remoteConfigStore)
     {
         _config = config;
         _store = store;
@@ -38,7 +44,9 @@ public sealed class AnalyticsClient : IAnalytics
         _ids = ids;
         _log = log;
         _retryDelay = retryDelay;
-        _anonymousId = ids.NewId();
+        _remoteConfigProvider = remoteConfigProvider;
+        _remoteConfigStore = remoteConfigStore;
+        _anonymousId = string.IsNullOrWhiteSpace(config.PlayerId) ? ids.NewId() : config.PlayerId!;
         _sessionId = ids.NewId();
         _consentGranted = !config.ConsentRequired;
         _config.Validate();
@@ -51,7 +59,9 @@ public sealed class AnalyticsClient : IAnalytics
         IClock clock,
         IAnalyticsIdGenerator ids,
         ILogSink? log = null,
-        IRetryDelay? retryDelay = null)
+        IRetryDelay? retryDelay = null,
+        IRemoteConfigProvider? remoteConfigProvider = null,
+        IRemoteConfigStore? remoteConfigStore = null)
     {
         return new AnalyticsClient(
             config,
@@ -60,12 +70,18 @@ public sealed class AnalyticsClient : IAnalytics
             clock,
             ids,
             log ?? new NullLogSink(),
-            retryDelay ?? new SystemRetryDelay());
+            retryDelay ?? new SystemRetryDelay(),
+            remoteConfigProvider,
+            remoteConfigStore);
     }
 
     public void Identify(string userId)
     {
         _userId = string.IsNullOrWhiteSpace(userId) ? null : userId;
+        if (_userId is not null)
+        {
+            _config.PlayerId = _userId;
+        }
     }
 
     public void SetUserProperty(string key, object? value)
@@ -106,6 +122,45 @@ public sealed class AnalyticsClient : IAnalytics
         Track("app_background");
     }
 
+    public ExperimentVariant GetVariant(string experimentKey)
+    {
+        if (string.IsNullOrWhiteSpace(experimentKey))
+        {
+            return new ExperimentVariant("control", new Dictionary<string, object?>());
+        }
+
+        if (!_remoteConfig.Variants.TryGetValue(experimentKey, out var variant))
+        {
+            return new ExperimentVariant("control", new Dictionary<string, object?>());
+        }
+
+        TrackExposure(experimentKey, variant.Name);
+        return variant;
+    }
+
+    public T GetParam<T>(string experimentKey, string key, T fallback)
+    {
+        var variant = GetVariant(experimentKey);
+        if (!variant.Parameters.TryGetValue(key, out var value) || value is null)
+        {
+            return fallback;
+        }
+
+        try
+        {
+            if (value is T typed)
+            {
+                return typed;
+            }
+
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+        catch (Exception)
+        {
+            return fallback;
+        }
+    }
+
     public bool Track(string name, IReadOnlyDictionary<string, object?>? properties = null)
     {
         if (!_consentGranted || _config.SamplingRate <= 0)
@@ -139,6 +194,29 @@ public sealed class AnalyticsClient : IAnalytics
         if (!granted)
         {
             _store.ClearAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+    }
+
+    public async Task RefreshConfigAsync(CancellationToken cancellationToken = default)
+    {
+        if (_remoteConfigProvider is null)
+        {
+            _remoteConfig = await LoadCachedConfig(cancellationToken) ?? RemoteConfig.Empty;
+            return;
+        }
+
+        try
+        {
+            _remoteConfig = await _remoteConfigProvider.FetchAsync(cancellationToken);
+            if (_remoteConfigStore is not null)
+            {
+                await _remoteConfigStore.SaveAsync(_remoteConfig, cancellationToken);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _log.Warning("Remote config fetch failed; using cached assignments.");
+            _remoteConfig = await LoadCachedConfig(cancellationToken) ?? RemoteConfig.Empty;
         }
     }
 
@@ -213,6 +291,29 @@ public sealed class AnalyticsClient : IAnalytics
             ["userProperties"] = new Dictionary<string, object?>(_userProperties),
         };
         return context;
+    }
+
+    private void TrackExposure(string experimentKey, string variant)
+    {
+        var exposureKey = $"{_sessionId}:{experimentKey}";
+        if (!_exposedExperiments.Add(exposureKey))
+        {
+            return;
+        }
+
+        var unitId = _userId ?? _anonymousId;
+        Track("experiment_exposure", new Dictionary<string, object?>
+        {
+            ["experiment_key"] = experimentKey,
+            ["variant"] = variant,
+            ["unit_id"] = unitId,
+            ["exposed_at"] = _clock.UtcNow.UtcDateTime.ToString("O"),
+        });
+    }
+
+    private Task<RemoteConfig?> LoadCachedConfig(CancellationToken cancellationToken)
+    {
+        return _remoteConfigStore?.LoadAsync(cancellationToken) ?? Task.FromResult<RemoteConfig?>(null);
     }
 
     private static bool ShouldRetry(TransportResult result)

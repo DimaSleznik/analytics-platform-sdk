@@ -14,8 +14,11 @@ public interface IAnalytics
     void EndSession();
     void AppForeground();
     void AppBackground();
+    ExperimentVariant GetVariant(string experimentKey);
+    T GetParam<T>(string experimentKey, string key, T fallback);
     bool Track(string name, IReadOnlyDictionary<string, object?>? properties = null);
     void SetConsent(bool granted);
+    Task RefreshConfigAsync(CancellationToken cancellationToken = default);
     Task<FlushResult> FlushAsync(CancellationToken cancellationToken = default);
 }
 
@@ -53,5 +56,16 @@ public interface ILogSink
 public interface IRetryDelay
 {
     Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken);
+}
+
+public interface IRemoteConfigProvider
+{
+    Task<RemoteConfig> FetchAsync(CancellationToken cancellationToken);
+}
+
+public interface IRemoteConfigStore
+{
+    Task SaveAsync(RemoteConfig config, CancellationToken cancellationToken);
+    Task<RemoteConfig?> LoadAsync(CancellationToken cancellationToken);
 }
 }
