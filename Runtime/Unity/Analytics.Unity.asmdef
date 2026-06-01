@@ -1,0 +1,16 @@
+{
+  "name": "Analytics.Unity",
+  "rootNamespace": "AnalyticsPlatform.Unity",
+  "references": [
+    "Analytics.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

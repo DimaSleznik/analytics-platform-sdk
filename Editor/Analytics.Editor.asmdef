@@ -1,0 +1,19 @@
+{
+  "name": "Analytics.Editor",
+  "rootNamespace": "AnalyticsPlatform.Editor",
+  "references": [
+    "Analytics.Core",
+    "Analytics.Unity"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
