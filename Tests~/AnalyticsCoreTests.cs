@@ -115,6 +115,49 @@ public sealed class AnalyticsCoreTests
     }
 
     [Fact]
+    public async Task ClientAddsBuildMarkersToContext()
+    {
+        var store = new InMemoryEventStore();
+        var transport = new CapturingTransport();
+        var config = Config();
+        config.Platform = "android";
+        config.AppVersion = "0.8.4";
+        config.BuildId = "android-0.8.4-forest";
+        config.GitSha = "8bf3a7c";
+        config.ContentVersion = "content-forest-03";
+        config.SdkVersion = "0.1.0";
+        var client = AnalyticsClient.Create(config, store, transport, new FixedClock(), new IncrementingIds());
+
+        client.Track("session_start").Should().BeTrue();
+        await client.FlushAsync();
+
+        transport.Batch.Events[0].Context["app_version"].Should().Be("0.8.4");
+        transport.Batch.Events[0].Context["build_id"].Should().Be("android-0.8.4-forest");
+        transport.Batch.Events[0].Context["git_sha"].Should().Be("8bf3a7c");
+        transport.Batch.Events[0].Context["content_version"].Should().Be("content-forest-03");
+        transport.Batch.Events[0].Context["sdk_version"].Should().Be("0.1.0");
+    }
+
+    [Fact]
+    public async Task TypedHelpersQueueCoreEconomyAndHealthEvents()
+    {
+        var store = new InMemoryEventStore();
+        var client = AnalyticsClient.Create(Config(), store, new CapturingTransport(), new FixedClock(), new IncrementingIds());
+
+        client.TrackEconomySink("gold", 25, "upgrade", "sword", 75).Should().BeTrue();
+        client.TrackPerformanceSample(28, "forest_03", 35.7, "low").Should().BeTrue();
+        client.TrackOfferShown("starter_offer", "shop").Should().BeTrue();
+
+        var events = await store.PeekAsync(10, CancellationToken.None);
+
+        events.Select(item => item.EventName).Should().Equal("economy.sink", "performance.sample", "offer_shown");
+        events[0].Properties["currency"].Should().Be("gold");
+        events[0].Properties["balance_after"].Should().Be(75d);
+        events[1].Properties["fps"].Should().Be(28d);
+        events[2].Properties["offer_id"].Should().Be("starter_offer");
+    }
+
+    [Fact]
     public async Task GetVariantLogsExposureOnce()
     {
         var store = new InMemoryEventStore();

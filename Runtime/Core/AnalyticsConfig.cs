@@ -12,6 +12,11 @@ public sealed class AnalyticsConfig
     public string? PlayerId { get; set; }
     public string? Platform { get; set; }
     public string? Version { get; set; }
+    public string? AppVersion { get; set; }
+    public string? BuildId { get; set; }
+    public string? GitSha { get; set; }
+    public string? ContentVersion { get; set; }
+    public string? SdkVersion { get; set; } = "0.1.0";
     public string? Cohort { get; set; }
     public bool RequireHmac { get; set; } = true;
     public int BatchSize { get; set; } = 50;

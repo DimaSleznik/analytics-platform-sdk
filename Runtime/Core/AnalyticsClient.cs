@@ -290,7 +290,22 @@ public sealed class AnalyticsClient : IAnalytics
         {
             ["userProperties"] = new Dictionary<string, object?>(_userProperties),
         };
+        AddContext(context, "platform", _config.Platform);
+        AddContext(context, "version", _config.Version);
+        AddContext(context, "app_version", _config.AppVersion ?? _config.Version);
+        AddContext(context, "build_id", _config.BuildId);
+        AddContext(context, "git_sha", _config.GitSha);
+        AddContext(context, "content_version", _config.ContentVersion);
+        AddContext(context, "sdk_version", _config.SdkVersion);
         return context;
+    }
+
+    private static void AddContext(IDictionary<string, object?> context, string key, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            context[key] = value;
+        }
     }
 
     private void TrackExposure(string experimentKey, string variant)

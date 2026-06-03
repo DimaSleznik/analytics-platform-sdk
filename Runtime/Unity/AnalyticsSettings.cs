@@ -10,6 +10,9 @@ public sealed class AnalyticsSettings : ScriptableObject
 {
     [SerializeField] private string endpoint = "http://localhost:3000/api";
     [SerializeField] private string projectId = "";
+    [SerializeField] private string buildId = "";
+    [SerializeField] private string contentVersion = "";
+    [SerializeField] private string gitShaEnvironmentVariable = "KF_ANALYTICS_GIT_SHA";
     [SerializeField] private string playerIdPrefsKey = "analytics.player_id";
     [SerializeField] private string apiKeyEnvironmentVariable = "KF_ANALYTICS_API_KEY";
     [SerializeField] private bool requireHmac = true;
@@ -35,6 +38,11 @@ public sealed class AnalyticsSettings : ScriptableObject
             ApiKey = Environment.GetEnvironmentVariable(apiKeyEnvironmentVariable) ?? string.Empty,
             Platform = Application.platform.ToString(),
             Version = Application.version,
+            AppVersion = Application.version,
+            BuildId = string.IsNullOrWhiteSpace(buildId) ? Application.version : buildId,
+            GitSha = Environment.GetEnvironmentVariable(gitShaEnvironmentVariable),
+            ContentVersion = contentVersion,
+            SdkVersion = "0.1.0",
             RequireHmac = requireHmac,
             BatchSize = batchSize,
             FlushInterval = TimeSpan.FromSeconds(flushIntervalSeconds),
@@ -48,8 +56,13 @@ public sealed class AnalyticsSettings : ScriptableObject
         };
         config.DefaultContext["platform"] = Application.platform.ToString();
         config.DefaultContext["version"] = Application.version;
+        config.DefaultContext["app_version"] = Application.version;
+        config.DefaultContext["build_id"] = config.BuildId;
+        config.DefaultContext["git_sha"] = config.GitSha;
+        config.DefaultContext["content_version"] = config.ContentVersion;
         config.DefaultContext["unityVersion"] = Application.unityVersion;
         config.DefaultContext["sdk"] = "com.knightfantasy.analytics";
+        config.DefaultContext["sdk_version"] = config.SdkVersion;
         return config;
     }
 }
