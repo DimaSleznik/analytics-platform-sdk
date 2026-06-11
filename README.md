@@ -4,10 +4,16 @@ Reusable UPM package for sending analytics events to the Analytics Platform.
 
 ## Install
 
-Add the package by a pinned Git URL:
+Unity Package Manager → Add package from git URL:
+
+```
+https://github.com/DimaSleznik/analytics-platform-sdk.git
+```
+
+Or pin it in `Packages/manifest.json`:
 
 ```json
-"com.knightfantasy.analytics": "https://github.com/<owner>/analytics-platform-sdk.git#v0.1.0"
+"com.knightfantasy.analytics": "https://github.com/DimaSleznik/analytics-platform-sdk.git#v0.1.0"
 ```
 
 ## Quickstart
